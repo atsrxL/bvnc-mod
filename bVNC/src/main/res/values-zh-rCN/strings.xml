@@ -730,6 +730,7 @@ aSPICE对应的功能如下：
     <string name="vnc_connection_settings">VNC连接设定</string>
     <string name="show_advanced_settings">显示详细设定</string>
     <string name="use_no_compression_for_local_connections">无压缩（本地连接，Hextile编码）</string>
+    <string name="prefer_h264_video">H.264 视频（PiKVM 等支持 Open H.264 的服务器）</string>
     <string name="rdp_connection_settings">RDP连接设定</string>
     <string name="local_device_tweaks">本地设备调整</string>
     <string name="spice_connection_settings">SPICE连接设定</string>

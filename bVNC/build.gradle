@@ -53,6 +53,7 @@ dependencies {
     implementation project(path: ':common')
     implementation 'com.google.android.gms:play-services-base:18.0.1'
     implementation 'jcifs:jcifs:1.3.17'
+    testImplementation 'junit:junit:4.13.2'
 }
 repositories {
     google()

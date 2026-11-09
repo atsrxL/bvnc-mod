@@ -170,6 +170,7 @@ public class RfbProto extends RfbConnectable implements RfbAuthChannel {
 //            EncodingXZYW = 19,
 //            EncodingZstd = 25,
     EncodingTightZstd = 26,
+            EncodingH264 = 50,                   // Open H.264 encoding
     //            EncodingZstdHex = 27,
 //            EncodingZSTDRLE = 28,
 //            EncodingZSTDYWRLE = 29,
@@ -465,6 +466,7 @@ public class RfbProto extends RfbConnectable implements RfbAuthChannel {
         maintainConnection = false;
         shutdownClipboardHandlerAndSetNull();
         closeSocket();
+        decoder.releaseH264();
     }
 
     @Override
@@ -2077,7 +2079,14 @@ public class RfbProto extends RfbConnectable implements RfbAuthChannel {
                         for (int i = 0; i < updateNRects; i++) {
                             readFramebufferUpdateRectHdr();
 
+                            if (updateRectEncoding >= 0 && updateRectEncoding != RfbProto.EncodingH264) {
+                                decoder.handleNonH264Rect();
+                            }
+
                             switch (updateRectEncoding) {
+                                case RfbProto.EncodingH264:
+                                    decoder.handleH264Rect(this, updateRectX, updateRectY, updateRectW, updateRectH);
+                                    break;
                                 case RfbProto.EncodingTight:
                                     decoder.handleTightRect(this, updateRectX, updateRectY, updateRectW, updateRectH, false);
                                     break;

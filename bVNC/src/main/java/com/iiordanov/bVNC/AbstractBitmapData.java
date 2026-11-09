@@ -56,6 +56,8 @@ abstract public class AbstractBitmapData implements AbstractDrawableData {
     Viewable vncCanvas;
     int xoffset = 0;
     int yoffset = 0;
+    // When true, decoded video is shown under the canvas and only the cursor is drawn.
+    volatile boolean videoActive = false;
 
     AbstractBitmapData(int width, int height, Viewable c) {
         vncCanvas = c;
@@ -310,6 +312,10 @@ abstract public class AbstractBitmapData implements AbstractDrawableData {
         return paint;
     }
 
+    public void setVideoActive(boolean videoActive) {
+        this.videoActive = videoActive;
+    }
+
     public Bitmap getMbitmap() {
         return mbitmap;
     }
@@ -394,7 +400,7 @@ abstract public class AbstractBitmapData implements AbstractDrawableData {
          */
         @Override
         public int getOpacity() {
-            return PixelFormat.OPAQUE;
+            return videoActive ? PixelFormat.TRANSLUCENT : PixelFormat.OPAQUE;
         }
 
         /* (non-Javadoc)

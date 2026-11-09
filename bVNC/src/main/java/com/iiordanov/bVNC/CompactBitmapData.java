@@ -181,7 +181,7 @@ class CompactBitmapData extends AbstractBitmapData {
             try {
                 synchronized(CompactBitmapData.this) {
                     if (drawing) {
-                        if (mbitmap != null && !mbitmap.isRecycled()) {
+                        if (!videoActive && mbitmap != null && !mbitmap.isRecycled()) {
                             canvas.drawBitmap(mbitmap, 0.0f, 0.0f, _defaultPaint);
                         }
                         if (softCursor != null && !softCursor.isRecycled()) {

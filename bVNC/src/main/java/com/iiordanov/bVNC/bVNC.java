@@ -68,6 +68,7 @@ public class bVNC extends MainConfiguration {
     private Spinner colorSpinner;
     private TextView autoXStatus;
     private CompoundButton checkboxPreferHextile;
+    private CompoundButton checkboxPreferH264;
     private CompoundButton checkboxViewOnly;
     private boolean repeaterTextSet;
     private Spinner spinnerVncGeometry;
@@ -164,6 +165,18 @@ public class bVNC extends MainConfiguration {
         groupForceFullScreen = findViewById(R.id.groupForceFullScreen);
 
         checkboxPreferHextile = findViewById(R.id.checkboxPreferHextile);
+        checkboxPreferH264 = findViewById(R.id.checkboxPreferH264);
+        // Hextile and H.264 are alternative preferred encodings.
+        checkboxPreferHextile.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (isChecked) {
+                checkboxPreferH264.setChecked(false);
+            }
+        });
+        checkboxPreferH264.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (isChecked) {
+                checkboxPreferHextile.setChecked(false);
+            }
+        });
         checkboxViewOnly = findViewById(R.id.checkboxViewOnly);
         colorSpinner.setAdapter(colorSpinnerAdapter);
         colorSpinner.setSelection(0);
@@ -273,6 +286,7 @@ public class bVNC extends MainConfiguration {
         groupForceFullScreen.check(selected.getForceFull() == BitmapImplHint.AUTO ?
                 R.id.radioForceFullScreenAuto : R.id.radioForceFullScreenOn);
         checkboxPreferHextile.setChecked(selected.getPrefEncoding() == RfbProto.EncodingHextile);
+        checkboxPreferH264.setChecked(selected.getPrefEncoding() == RfbProto.EncodingH264);
         checkboxViewOnly.setChecked(selected.getViewOnly());
         textUsername.setText(selected.getUserName());
         COLORMODEL cm = COLORMODEL.C24bit;
@@ -335,7 +349,9 @@ public class bVNC extends MainConfiguration {
         selected.setUserName(textUsername.getText().toString());
         selected.setForceFull(groupForceFullScreen.getCheckedButtonId() == R.id.radioForceFullScreenAuto ? BitmapImplHint.AUTO : (groupForceFullScreen.getCheckedButtonId() == R.id.radioForceFullScreenOn ? BitmapImplHint.FULL : BitmapImplHint.TILE));
 
-        if (checkboxPreferHextile.isChecked())
+        if (checkboxPreferH264.isChecked())
+            selected.setPrefEncoding(RfbProto.EncodingH264);
+        else if (checkboxPreferHextile.isChecked())
             selected.setPrefEncoding(RfbProto.EncodingHextile);
         else
             selected.setPrefEncoding(RfbProto.EncodingTight);

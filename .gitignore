@@ -220,3 +220,5 @@ check_elf_alignment*
 remote-desktop-clients-libs-*
 
 venv
+common/aars/*.aar
+bVNC/libs/*.jar

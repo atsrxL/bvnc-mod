@@ -88,6 +88,9 @@ public class Decoder {
     // These colors should be kept between handleHextileSubrect() calls.
     private int hextile_bg, hextile_fg;
     private AbstractDrawableData bitmapData;
+    // Open H.264 decoder's data.
+    private static final int MAX_H264_RECT_BYTES = 64 * 1024 * 1024;
+    private byte[] h264Buffer = new byte[0];
 
     /**
      * Creates a new Decoder bound to the given canvas and input handler.
@@ -203,6 +206,40 @@ public class Decoder {
 
         if (paint)
             vncCanvas.reDraw(x, y, w, h);
+    }
+
+    //
+    // Handle an Open H.264 rectangle: u32 length, u32 flags, then Annex-B data.
+    //
+    void handleH264Rect(RfbProto rfb, int x, int y, int w, int h) throws Exception {
+        long length = rfb.is.readInt() & 0xffffffffL;
+        int flags = rfb.is.readInt();
+        if (length > MAX_H264_RECT_BYTES) {
+            throw new IOException("H.264 rectangle too large: " + length + " bytes");
+        }
+        if (h264Buffer.length < length) {
+            h264Buffer = new byte[(int) length];
+        }
+        rfb.is.readBytes(h264Buffer, 0, (int) length);
+        if (vncCanvas instanceof RemoteCanvas) {
+            boolean reset = (flags & 0x3) != 0;
+            ((RemoteCanvas) vncCanvas).getH264Decoder().decode(h264Buffer, (int) length, reset, w, h);
+        }
+    }
+
+    /**
+     * Called before any non-H.264 pixel rectangle so the bitmap is shown again.
+     */
+    void handleNonH264Rect() {
+        if (vncCanvas instanceof RemoteCanvas) {
+            ((RemoteCanvas) vncCanvas).setVideoActive(false);
+        }
+    }
+
+    void releaseH264() {
+        if (vncCanvas instanceof RemoteCanvas) {
+            ((RemoteCanvas) vncCanvas).releaseH264Decoder();
+        }
     }
 
     //

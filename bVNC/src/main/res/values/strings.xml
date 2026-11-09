@@ -905,6 +905,7 @@ When you add or edit a connection, you will see a connection configuration page.
     <string name="vnc_connection_settings">VNC Connection Settings</string>
     <string name="show_advanced_settings">Show Advanced Settings</string>
     <string name="use_no_compression_for_local_connections">No compression (local connections, Hextile encoding)</string>
+    <string name="prefer_h264_video">H.264 video (PiKVM and other Open H.264 servers)</string>
     <string name="rdp_connection_settings">RDP Connection Settings</string>
     <string name="local_device_tweaks">Local Device Tweaks</string>
     <string name="spice_connection_settings">SPICE Connection Settings</string>

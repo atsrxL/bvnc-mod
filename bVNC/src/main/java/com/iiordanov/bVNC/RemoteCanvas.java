@@ -34,14 +34,21 @@ import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Matrix;
 import android.graphics.RectF;
+import android.graphics.SurfaceTexture;
+import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.provider.Settings;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Display;
+import android.view.Surface;
+import android.view.TextureView;
+import android.view.View;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
@@ -50,6 +57,7 @@ import androidx.appcompat.widget.AppCompatImageView;
 
 import com.google.android.material.snackbar.Snackbar;
 import com.iiordanov.android.bc.BCFactory;
+import com.iiordanov.bVNC.h264.H264VideoDecoder;
 import com.iiordanov.bVNC.input.TouchInputHandlerTouchpad;
 import com.undatech.opaque.AbstractDrawableData;
 import com.undatech.opaque.Connection;
@@ -139,6 +147,54 @@ public class RemoteCanvas extends AppCompatImageView implements Viewable {
     CharSequence screenMessage;
 
     DrawableReallocatedListener drawableReallocatedListener;
+
+    /*
+     * Open H.264 video is decoded onto a TextureView placed under this view. While video is
+     * active, the bitmap is not drawn and this view only renders the local cursor on top.
+     */
+    private TextureView videoView;
+    private Surface videoSurface;
+    private H264VideoDecoder h264Decoder;
+    private volatile boolean videoActive = false;
+    private Drawable canvasBackground;
+    private final Matrix videoTransform = new Matrix();
+    private final Matrix appliedVideoTransform = new Matrix();
+
+    private final TextureView.SurfaceTextureListener videoSurfaceListener = new TextureView.SurfaceTextureListener() {
+        @Override
+        public void onSurfaceTextureAvailable(SurfaceTexture surfaceTexture, int width, int height) {
+            synchronized (RemoteCanvas.this) {
+                videoSurface = new Surface(surfaceTexture);
+                if (h264Decoder != null) {
+                    h264Decoder.setSurface(videoSurface);
+                }
+            }
+        }
+
+        @Override
+        public void onSurfaceTextureSizeChanged(SurfaceTexture surfaceTexture, int width, int height) {
+            appliedVideoTransform.reset();
+            invalidate();
+        }
+
+        @Override
+        public boolean onSurfaceTextureDestroyed(SurfaceTexture surfaceTexture) {
+            synchronized (RemoteCanvas.this) {
+                if (h264Decoder != null) {
+                    h264Decoder.setSurface(null);
+                }
+                if (videoSurface != null) {
+                    videoSurface.release();
+                    videoSurface = null;
+                }
+            }
+            return true;
+        }
+
+        @Override
+        public void onSurfaceTextureUpdated(SurfaceTexture surfaceTexture) {
+        }
+    };
 
     /**
      * Shows a non-fatal error message.
@@ -313,6 +369,7 @@ public class RemoteCanvas extends AppCompatImageView implements Viewable {
         }
 
         reallocateMyDrawable(dx, dy);
+        applyVideoActiveToDrawable();
 
         try {
             if (needsLocalCursor()) {
@@ -662,6 +719,112 @@ public class RemoteCanvas extends AppCompatImageView implements Viewable {
                 myDrawable.scrollChanged(absoluteXPosition, absoluteYPosition);
             }
         }
+    }
+
+    /**
+     * Returns the H.264 decoder, creating it and showing the video view on first use.
+     */
+    public synchronized H264VideoDecoder getH264Decoder() {
+        if (h264Decoder == null) {
+            h264Decoder = new H264VideoDecoder(() -> setVideoActive(true));
+            post(this::attachVideoView);
+        }
+        return h264Decoder;
+    }
+
+    public void releaseH264Decoder() {
+        H264VideoDecoder decoder;
+        synchronized (this) {
+            decoder = h264Decoder;
+            h264Decoder = null;
+        }
+        if (decoder != null) {
+            decoder.release();
+        }
+        setVideoActive(false);
+    }
+
+    private void attachVideoView() {
+        if (videoView == null) {
+            View parent = (View) getParent();
+            videoView = parent == null ? null : parent.findViewById(R.id.videoView);
+            if (videoView == null) {
+                Log.e(TAG, "No video view found, H.264 video cannot be displayed");
+                return;
+            }
+            videoView.setSurfaceTextureListener(videoSurfaceListener);
+            videoView.addOnLayoutChangeListener((v, l, t, r, b, oldL, oldT, oldR, oldB) -> {
+                appliedVideoTransform.reset();
+                invalidate();
+            });
+        }
+        videoView.setVisibility(View.VISIBLE);
+        synchronized (this) {
+            if (videoSurface == null && videoView.isAvailable()) {
+                videoSurface = new Surface(videoView.getSurfaceTexture());
+            }
+            if (h264Decoder != null && videoSurface != null) {
+                h264Decoder.setSurface(videoSurface);
+            }
+        }
+    }
+
+    /**
+     * Switches between showing decoded H.264 video and the bitmap. Safe to call from any thread.
+     */
+    public void setVideoActive(boolean active) {
+        if (videoActive == active) {
+            return;
+        }
+        videoActive = active;
+        post(() -> {
+            applyVideoActiveToDrawable();
+            if (canvasBackground == null) {
+                canvasBackground = getBackground();
+            }
+            setBackground(videoActive ? null : canvasBackground);
+            appliedVideoTransform.reset();
+            invalidate();
+        });
+    }
+
+    private void applyVideoActiveToDrawable() {
+        synchronized (this) {
+            if (myDrawable instanceof AbstractBitmapData) {
+                ((AbstractBitmapData) myDrawable).setVideoActive(videoActive);
+            }
+        }
+    }
+
+    /**
+     * Maps the video buffer, which TextureView stretches to its own bounds, onto the same
+     * coordinates the bitmap is drawn with: framebuffer pixels, then zoom, then scroll.
+     */
+    private void updateVideoTransform() {
+        int viewWidth = videoView.getWidth();
+        int viewHeight = videoView.getHeight();
+        int fbWidth = getImageWidth();
+        int fbHeight = getImageHeight();
+        if (viewWidth == 0 || viewHeight == 0 || fbWidth == 0 || fbHeight == 0) {
+            return;
+        }
+        videoTransform.setScale((float) fbWidth / viewWidth, (float) fbHeight / viewHeight);
+        videoTransform.postConcat(getImageMatrix());
+        videoTransform.postTranslate(getPaddingLeft() - getScrollX() + getLeft() - videoView.getLeft(),
+                getPaddingTop() - getScrollY() + getTop() - videoView.getTop());
+        if (!videoTransform.equals(appliedVideoTransform)) {
+            appliedVideoTransform.set(videoTransform);
+            videoView.setTransform(videoTransform);
+            videoView.invalidate();
+        }
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        if (videoActive && videoView != null) {
+            updateVideoTransform();
+        }
+        super.onDraw(canvas);
     }
 
     @Override
